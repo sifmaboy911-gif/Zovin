@@ -1,0 +1,28 @@
+name: Build C++ ESP Binary
+
+on:
+  push:
+    branches: [ "main" ]
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v3
+
+    - name: Setup Android NDK
+      uses: nttld/setup-ndk@v1
+      with:
+        ndk-version: r25c
+
+    - name: Build with Clang (ARM64)
+      run: |
+        $ANDROID_NDK_HOME/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android21-clang++ \
+        -O3 -s -static-libstdc++ -fPIE -pie -o esp_bin main.cpp
+
+    - name: Upload Binary
+      uses: actions/upload-artifact@v3
+      with:
+        name: esp_binary
+        path: esp_bin
