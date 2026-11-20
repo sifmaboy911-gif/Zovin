@@ -9,7 +9,7 @@ jobs:
   build:
     runs-on: ubuntu-latest
     steps:
-    - uses: actions/checkout@v3
+    - uses: actions/checkout@v4
 
     - name: Setup Android NDK
       uses: nttld/setup-ndk@v1
@@ -22,7 +22,7 @@ jobs:
         -O3 -s -static-libstdc++ -fPIE -pie -o esp_bin main.cpp
 
     - name: Upload Binary
-      uses: actions/upload-artifact@v3
+      uses: actions/upload-artifact@v4
       with:
         name: esp_binary
         path: esp_bin
