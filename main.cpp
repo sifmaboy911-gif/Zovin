@@ -12,6 +12,7 @@
 #include <fcntl.h>
 #include <cstring>
 
+// Оффсеты из нового дампа
 const uintptr_t OFF_CLIENT_WORLD = 0xCD2F9B0;
 const uintptr_t OFF_REGISTRY = 0x40;
 const uintptr_t OFF_WORLD = 0x20;
@@ -19,11 +20,11 @@ const uintptr_t OFF_STORE = 0x30;
 const uintptr_t OFF_OBJECTS = 0x18;
 const uintptr_t OFF_LIST_ITEMS = 0x10;
 const uintptr_t OFF_LIST_COUNT = 0x18;
+
+const uintptr_t OFF_PLAYER_STATS = 0x70;
+const uintptr_t OFF_STATS_HP = 0x10; // short
 const uintptr_t OFF_PLAYER_TRANSFORM = 0x20;
 const uintptr_t OFF_TRANSFORM_POS = 0x38;
-const uintptr_t OFF_PLAYER_STATS = 0x70;
-const uintptr_t OFF_STATS_HP = 0x10;
-const uintptr_t OFF_VIEW_MATRIX = 0xCD32028;
 
 int gamePid = -1;
 int memFd = -1;
@@ -46,15 +47,12 @@ uintptr_t getModuleBase(int pid, const char* moduleName) {
     while (std::getline(maps, line)) {
         if (line.find(moduleName) != std::string::npos && line.find("r-xp") != std::string::npos) {
             size_t pos = line.find('-');
-            if (pos != std::string::npos) {
-                return std::stoull(line.substr(0, pos), nullptr, 16);
-            }
+            if (pos != std::string::npos) return std::stoull(line.substr(0, pos), nullptr, 16);
         }
     }
     return 0;
 }
 
-// Чтение памяти через pread (работает от root)
 bool readMem(uintptr_t address, void* buffer, size_t size) {
     if (memFd == -1) return false;
     ssize_t nread = pread(memFd, buffer, size, address);
@@ -100,8 +98,6 @@ int main() {
         gamePid = getPid("com.axlebolt.standoff2");
         if (gamePid != -1) {
             baseAddr = getModuleBase(gamePid, "libil2cpp.so");
-            
-            // Открываем mem файл один раз
             if (memFd == -1 && baseAddr != 0) {
                 std::string memPath = "/proc/" + std::to_string(gamePid) + "/mem";
                 memFd = open(memPath.c_str(), O_RDONLY);
@@ -116,7 +112,9 @@ int main() {
             continue;
         }
 
-        readMem(baseAddr + OFF_VIEW_MATRIX, viewMatrix, sizeof(viewMatrix));
+        // Пытаемся прочитать матрицу по старому оффсету (если не работает, будут нули)
+        // В идеале здесь должен быть указатель на Camera + 0x70
+        readMem(baseAddr + 0xCD32028, viewMatrix, sizeof(viewMatrix)); 
 
         uintptr_t clientWorld = read<uintptr_t>(baseAddr + OFF_CLIENT_WORLD);
         if (clientWorld == 0) {
@@ -150,7 +148,7 @@ int main() {
 
                 uintptr_t statsObj = read<uintptr_t>(playerObj + OFF_PLAYER_STATS);
                 if (statsObj != 0) {
-                    int hp = read<int>(statsObj + OFF_STATS_HP);
+                    short hp = read<short>(statsObj + OFF_STATS_HP);
                     if (hp <= 0) continue;
                 }
 
@@ -161,9 +159,13 @@ int main() {
                 float wy = read<float>(transform + OFF_TRANSFORM_POS + 4);
                 float wz = read<float>(transform + OFF_TRANSFORM_POS + 8);
 
-                float sx, sy;
+                float sx = 0, sy = 0;
+                // Если матрица нулевая, рисуем в левом верхнем углу (для теста)
                 if (worldToScreen(wx, wy, wz, &sx, &sy)) {
                     response += std::to_string(sx) + "," + std::to_string(sy) + ";";
+                } else {
+                    // Тестовый вывод в угол
+                    response += "100,100;"; 
                 }
             }
         }
